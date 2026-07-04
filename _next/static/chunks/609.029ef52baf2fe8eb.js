@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[609],{609:(i,s,a)=>{a.d(s,{prisma:()=>e});function e(){throw Error("prisma is not available in static demo build")}}}]);

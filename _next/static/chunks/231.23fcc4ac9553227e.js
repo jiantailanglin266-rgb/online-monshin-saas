@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[231],{6231:(a,e,s)=>{s.d(e,{createSupabaseAdmin:()=>i});function i(){throw Error("supabase is not available in static demo build")}}}]);
