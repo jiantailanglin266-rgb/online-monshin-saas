@@ -1,5 +1,6 @@
-import "server-only";
-import { randomUUID } from "crypto";
+// NOTE: 静的デモ(GitHub Pages)のブラウザ内エンジンからも利用するため "server-only" は付けない。
+// サーバー専用の秘匿情報はこのモジュールには置かないこと。
+import { newId } from "@/lib/id";
 import { isDemoMode } from "@/lib/env";
 import type { AuthContext } from "@/lib/auth/types";
 import type {
@@ -64,7 +65,7 @@ const demoRepo: QuestionnaireRepo = {
     if (existing) return existing;
     const patient = db.patients.find((p) => p.id === ctx.patientId);
     const q: Questionnaire = {
-      id: randomUUID(),
+      id: newId("questionnaire"),
       clinicId: ctx.clinicId!,
       patientId: ctx.patientId!,
       templateType,
@@ -150,7 +151,7 @@ const demoRepo: QuestionnaireRepo = {
     const q = await this.findOwn(ctx, id);
     if (!q || q.imageCount >= 5) return null;
     demoDb().images.push({
-      id: randomUUID(),
+      id: newId(),
       questionnaireId: id,
       clinicId: q.clinicId,
       mimeType: image.mimeType,
@@ -371,7 +372,7 @@ const prismaRepo: QuestionnaireRepo = {
     const { createSupabaseAdmin } = await import("@/lib/supabase/admin");
     const admin = createSupabaseAdmin();
     const ext = image.mimeType === "image/png" ? "png" : image.mimeType === "image/webp" ? "webp" : "jpg";
-    const path = `${q.clinicId}/${q.id}/${randomUUID()}.${ext}`;
+    const path = `${q.clinicId}/${q.id}/${newId()}.${ext}`;
     const base64 = image.dataUrl.split(",")[1] ?? "";
     const buffer = Buffer.from(base64, "base64");
     const { error } = await admin.storage

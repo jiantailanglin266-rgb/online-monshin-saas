@@ -1,4 +1,5 @@
-import "server-only";
+// NOTE: 静的デモ(GitHub Pages)のブラウザ内エンジンからも利用するため "server-only" は付けない。
+// サーバー専用の秘匿情報はこのモジュールには置かないこと。
 
 /** 実プロバイダ呼び出し（fetch直、SDK不使用）。タイムアウトはAbortController。 */
 

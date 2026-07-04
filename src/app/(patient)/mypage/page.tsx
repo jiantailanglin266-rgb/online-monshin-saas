@@ -1,6 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getAuthContext } from "@/lib/auth/context";
-import { questionnaireRepo } from "@/lib/repo/questionnaires";
 import { categoryLabel, type Questionnaire } from "@/lib/types/questionnaire";
 import { Card } from "@/components/ui/Card";
 
@@ -19,9 +20,14 @@ function qLink(q: Questionnaire): string {
   return `/questionnaire/${q.id}/result`;
 }
 
-export default async function MyPage() {
-  const ctx = await getAuthContext();
-  const list = ctx ? await questionnaireRepo().listOwn(ctx) : [];
+export default function MyPage() {
+  const [list, setList] = useState<Questionnaire[] | null>(null);
+
+  useEffect(() => {
+    fetch("/api/v1/questionnaires")
+      .then((r) => (r.ok ? r.json() : { questionnaires: [] }))
+      .then((b) => setList(b.questionnaires ?? []));
+  }, []);
 
   return (
     <main className="grid gap-4">
@@ -45,7 +51,9 @@ export default async function MyPage() {
 
       <Card>
         <p className="font-bold">問診の履歴</p>
-        {list.length === 0 ? (
+        {list === null ? (
+          <p className="mt-2 text-[15px] text-ink-sub">読み込んでいます…</p>
+        ) : list.length === 0 ? (
           <p className="mt-2 text-[15px] text-ink-sub">まだ問診の記録はありません。</p>
         ) : (
           <ul className="mt-3 grid gap-2">
@@ -63,9 +71,7 @@ export default async function MyPage() {
                   </span>
                   <span
                     className={`rounded-lg px-2.5 py-1 text-[13px] font-bold ${
-                      q.status === "draft"
-                        ? "bg-l2-soft text-l2"
-                        : "bg-primary-soft text-primary"
+                      q.status === "draft" ? "bg-l2-soft text-l2" : "bg-primary-soft text-primary"
                     }`}
                   >
                     {statusLabel[q.status] ?? q.status}

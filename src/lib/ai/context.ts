@@ -1,4 +1,5 @@
-import "server-only";
+// NOTE: 静的デモ(GitHub Pages)のブラウザ内エンジンからも利用するため "server-only" は付けない。
+// サーバー専用の秘匿情報はこのモジュールには置かないこと。
 import type { Questionnaire, AiQuestionItem } from "@/lib/types/questionnaire";
 import { categoryLabel, ONSET_OPTIONS } from "@/lib/types/questionnaire";
 import type { PatientMeta } from "@/lib/repo/questionnaires";

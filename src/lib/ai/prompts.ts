@@ -1,4 +1,5 @@
-import "server-only";
+// NOTE: 静的デモ(GitHub Pages)のブラウザ内エンジンからも利用するため "server-only" は付けない。
+// サーバー専用の秘匿情報はこのモジュールには置かないこと。
 
 /**
  * AIプロンプト実装（AI_PROMPTS.md v1 準拠）。

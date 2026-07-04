@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
 import { DemoBanner } from "@/components/DemoBanner";
+import { StaticDemoBridge } from "@/components/StaticDemoBridge";
 
 const noto = Noto_Sans_JP({
   subsets: ["latin"],
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja">
       <body className={noto.className}>
+        <StaticDemoBridge />
         <DemoBanner />
         {children}
       </body>

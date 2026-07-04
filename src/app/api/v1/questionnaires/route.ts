@@ -8,6 +8,17 @@ const bodySchema = z.object({
   templateType: z.enum(["internal", "dermatology"]),
 });
 
+/** 自分の問診一覧（マイページ用） */
+export async function GET() {
+  try {
+    const ctx = await requireRole("patient");
+    const list = await questionnaireRepo().listOwn(ctx);
+    return NextResponse.json({ questionnaires: list });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}
+
 /** 問診draft作成（既存draftがあればそれを返す） */
 export async function POST(request: NextRequest) {
   try {

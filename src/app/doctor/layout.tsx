@@ -1,13 +1,33 @@
-import { notFound, redirect } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getAuthContext } from "@/lib/auth/context";
+import { useRouter } from "next/navigation";
 import { LogoutButton } from "@/components/LogoutButton";
 
-export default async function DoctorLayout({ children }: { children: React.ReactNode }) {
-  const ctx = await getAuthContext();
-  if (!ctx) redirect("/login");
-  if (ctx.role !== "doctor") notFound();
-  if (!ctx.mfaEnrolled) redirect("/auth/mfa");
+/** 医師用シェル（クライアントゲート）。認可の正はAPI層（requireRole） */
+export default function DoctorLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const [name, setName] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/v1/me").then(async (r) => {
+      if (!r.ok) {
+        router.replace("/login");
+        return;
+      }
+      const me = await r.json();
+      if (me.role !== "doctor") {
+        router.replace("/login");
+        return;
+      }
+      if (!me.mfaEnrolled) {
+        router.replace("/auth/mfa");
+        return;
+      }
+      setName(me.displayName);
+    });
+  }, [router]);
 
   return (
     <div className="min-h-dvh">
@@ -22,12 +42,12 @@ export default async function DoctorLayout({ children }: { children: React.React
             </nav>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-[14px] text-ink-sub">Dr. {ctx.displayName}</span>
+            <span className="text-[14px] text-ink-sub">{name ? `Dr. ${name}` : ""}</span>
             <LogoutButton />
           </div>
         </div>
       </header>
-      <div className="mx-auto max-w-6xl px-6 py-6">{children}</div>
+      <div className="mx-auto max-w-6xl px-6 py-6">{name ? children : null}</div>
     </div>
   );
 }

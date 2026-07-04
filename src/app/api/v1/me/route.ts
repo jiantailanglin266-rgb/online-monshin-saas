@@ -13,6 +13,7 @@ export async function GET() {
   return NextResponse.json({
     role: ctx.role,
     displayName: ctx.displayName,
+    email: ctx.email,
     mfaEnrolled: ctx.mfaEnrolled,
     demo: ctx.demo,
   });

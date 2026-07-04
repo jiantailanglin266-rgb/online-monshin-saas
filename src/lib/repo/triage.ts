@@ -1,5 +1,6 @@
-import "server-only";
-import { randomUUID } from "crypto";
+// NOTE: 静的デモ(GitHub Pages)のブラウザ内エンジンからも利用するため "server-only" は付けない。
+// サーバー専用の秘匿情報はこのモジュールには置かないこと。
+import { newId } from "@/lib/id";
 import { isDemoMode } from "@/lib/env";
 import type { AuthContext } from "@/lib/auth/types";
 import type { SoapData, TriageLevel, TriageResultItem } from "@/lib/types/questionnaire";
@@ -34,7 +35,7 @@ export interface SummaryRepo {
 const demoTriageRepo: TriageRepo = {
   async add(ctx, questionnaireId, data) {
     const item = {
-      id: randomUUID(),
+      id: newId(),
       questionnaireId,
       clinicId: ctx.clinicId!,
       finalLevel: data.finalLevel,
@@ -68,7 +69,7 @@ const demoSummaryRepo: SummaryRepo = {
       return;
     }
     db.aiSummaries.push({
-      id: randomUUID(),
+      id: newId(),
       questionnaireId,
       clinicId: ctx.clinicId!,
       soap,

@@ -34,9 +34,16 @@ export async function GET(_request: NextRequest, { params }: Params) {
   try {
     const ctx = await requireRole("patient");
     const { id } = await params;
-    const q = await questionnaireRepo().findOwn(ctx, id);
+    const repo = questionnaireRepo();
+    const q = await repo.findOwn(ctx, id);
     if (!q) throw new ApiError(404, "NOT_FOUND", "問診が見つかりません");
-    return NextResponse.json(q);
+    // 妊娠質問の出し分け等に必要な最小属性のみ付与（氏名等は返さない）
+    const meta = await repo.getOwnPatientMeta(ctx);
+    return NextResponse.json({
+      ...q,
+      patientSex: meta?.sex ?? "no_answer",
+      patientAge: meta?.age ?? null,
+    });
   } catch (e) {
     return errorResponse(e);
   }

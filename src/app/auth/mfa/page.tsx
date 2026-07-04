@@ -1,12 +1,34 @@
-import { redirect } from "next/navigation";
-import { getAuthContext } from "@/lib/auth/context";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { MfaSetup } from "./MfaSetup";
 
-export default async function MfaPage() {
-  const ctx = await getAuthContext();
-  if (!ctx) redirect("/login");
-  if (ctx.role === "patient") redirect("/mypage"); // 患者はMFA対象外（MVP）
-  if (ctx.mfaEnrolled) redirect(ctx.role === "doctor" ? "/doctor" : "/admin");
+export default function MfaPage() {
+  const router = useRouter();
+  const [me, setMe] = useState<{ demo: boolean; homePath: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/v1/me").then(async (r) => {
+      if (!r.ok) {
+        router.replace("/login");
+        return;
+      }
+      const m = await r.json();
+      if (m.role === "patient") {
+        router.replace("/mypage"); // 患者はMFA対象外（MVP）
+        return;
+      }
+      const homePath = m.role === "doctor" ? "/doctor" : "/admin";
+      if (m.mfaEnrolled) {
+        router.replace(homePath);
+        return;
+      }
+      setMe({ demo: m.demo, homePath });
+    });
+  }, [router]);
+
+  if (!me) return null;
 
   return (
     <main className="mx-auto max-w-lg px-5 py-10">
@@ -15,7 +37,7 @@ export default async function MfaPage() {
         医療情報を扱うアカウントでは、二段階認証の設定が必要です。
         設定が完了するまで、各機能はご利用いただけません。
       </p>
-      <MfaSetup demo={ctx.demo} homePath={ctx.role === "doctor" ? "/doctor" : "/admin"} />
+      <MfaSetup demo={me.demo} homePath={me.homePath} />
     </main>
   );
 }
