@@ -1,0 +1,432 @@
+// MediBridge — Prisma schema（Phase 3 DB設計書の実装版）
+// 注意: RLSポリシー・追記専用REVOKE・部分UNIQUEインデックスは
+// supabase/migrations の手書きSQLで管理する（Prismaでは表現不可）。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  patient
+  doctor
+  clinic_admin
+  super_admin
+}
+
+enum QStatus {
+  draft
+  ai_interview
+  triaged
+  doctor_reviewed
+  consulted
+  abandoned
+}
+
+enum TriageLevel {
+  L1
+  L2
+  L3
+  L4
+}
+
+enum NoteType {
+  clinical
+  prescription
+  patient_comment
+}
+
+enum AiPurpose {
+  initial_analysis
+  question_gen
+  triage
+  soap
+  department
+  danger_check
+}
+
+enum ApptStatus {
+  booked
+  canceled
+  completed
+  no_show
+}
+
+model Clinic {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  departments String[]
+  settings    Json     @default("{}")
+  status      String   @default("active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users          User[]
+  patients       Patient[]
+  doctors        Doctor[]
+  questionnaires MedicalQuestionnaire[]
+  slots          AppointmentSlot[]
+  appointments   Appointment[]
+
+  @@map("clinics")
+}
+
+model User {
+  id          String    @id @db.Uuid // = auth.users.id
+  role        Role
+  clinicId    String?   @map("clinic_id") @db.Uuid
+  email       String
+  mfaEnrolled Boolean   @default(false) @map("mfa_enrolled")
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  clinic  Clinic?  @relation(fields: [clinicId], references: [id])
+  patient Patient?
+  doctor  Doctor?
+
+  @@map("users")
+}
+
+model Patient {
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @unique @map("user_id") @db.Uuid
+  clinicId            String    @map("clinic_id") @db.Uuid
+  name                String
+  nameKana            String    @map("name_kana")
+  birthDate           DateTime  @map("birth_date") @db.Date
+  sex                 String
+  phone               String?
+  baselineHistory     Json      @default("[]") @map("baseline_history")
+  baselineMedications Json      @default("[]") @map("baseline_medications")
+  baselineAllergies   Json      @default("[]") @map("baseline_allergies")
+  anonymizedAt        DateTime? @map("anonymized_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  user           User                   @relation(fields: [userId], references: [id])
+  clinic         Clinic                 @relation(fields: [clinicId], references: [id])
+  questionnaires MedicalQuestionnaire[]
+  appointments   Appointment[]
+
+  @@index([clinicId])
+  @@map("patients")
+}
+
+model Doctor {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique @map("user_id") @db.Uuid
+  clinicId          String   @map("clinic_id") @db.Uuid
+  name              String
+  specialties       String[]
+  photoPath         String?  @map("photo_path")
+  licenseRegistered Boolean  @default(false) @map("license_registered")
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user         User              @relation(fields: [userId], references: [id])
+  clinic       Clinic            @relation(fields: [clinicId], references: [id])
+  slots        AppointmentSlot[]
+  appointments Appointment[]
+
+  @@index([clinicId])
+  @@map("doctors")
+}
+
+model MedicalQuestionnaire {
+  id                     String    @id @default(uuid()) @db.Uuid
+  clinicId               String    @map("clinic_id") @db.Uuid
+  patientId              String    @map("patient_id") @db.Uuid
+  templateType           String    @map("template_type")
+  status                 QStatus   @default(draft)
+  emergencyFlagged       Boolean   @default(false) @map("emergency_flagged")
+  chiefComplaintCategory String?   @map("chief_complaint_category")
+  chiefComplaintText     String?   @map("chief_complaint_text")
+  onset                  String?
+  painScale              Int?      @map("pain_scale") @db.SmallInt
+  bodyTemp               Decimal?  @map("body_temp") @db.Decimal(3, 1)
+  historySnapshot        Json      @default("[]") @map("history_snapshot")
+  medicationsSnapshot    Json      @default("[]") @map("medications_snapshot")
+  allergiesSnapshot      Json      @default("[]") @map("allergies_snapshot")
+  pregnancyStatus        String?   @map("pregnancy_status")
+  lifestyle              Json      @default("{}")
+  freeText               String?   @map("free_text")
+  currentStep            Int       @default(1) @map("current_step") @db.SmallInt
+  submittedAt            DateTime? @map("submitted_at")
+  suggestedDepartments   String[]  @map("suggested_departments")
+  interviewPlan          Json?     @map("interview_plan")
+  proxyInput             Json?     @map("proxy_input")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  clinic        Clinic              @relation(fields: [clinicId], references: [id])
+  patient       Patient             @relation(fields: [patientId], references: [id])
+  aiQuestions   AiQuestion[]
+  triageResults TriageResult[]
+  aiSummary     AiSummary?
+  doctorNotes   DoctorNote[]
+  images        UploadedImage[]
+  aiLogs        AiLog[]
+  appointments  Appointment[]
+
+  @@index([clinicId, status, submittedAt(sort: Desc)])
+  @@index([patientId, createdAt(sort: Desc)])
+  @@map("medical_questionnaires")
+}
+
+model AiQuestion {
+  id              String    @id @default(uuid()) @db.Uuid
+  questionnaireId String    @map("questionnaire_id") @db.Uuid
+  clinicId        String    @map("clinic_id") @db.Uuid
+  seq             Int       @db.SmallInt
+  questionText    String    @map("question_text")
+  questionType    String    @map("question_type")
+  options         Json?
+  answer          Json?
+  answeredAt      DateTime? @map("answered_at")
+  source          String
+  aiLogId         String?   @map("ai_log_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  questionnaire MedicalQuestionnaire @relation(fields: [questionnaireId], references: [id])
+
+  @@unique([questionnaireId, seq])
+  @@map("ai_questions")
+}
+
+model TriageResult {
+  id              String       @id @default(uuid()) @db.Uuid
+  questionnaireId String       @map("questionnaire_id") @db.Uuid
+  clinicId        String       @map("clinic_id") @db.Uuid
+  finalLevel      TriageLevel  @map("final_level")
+  aiLevel         TriageLevel? @map("ai_level")
+  ruleLevel       TriageLevel  @map("rule_level")
+  aiReasons       Json?        @map("ai_reasons")
+  ruleHits        Json?        @map("rule_hits")
+  aiLogId         String?      @map("ai_log_id") @db.Uuid
+  promptVersion   String?      @map("prompt_version")
+  supersededById  String?      @map("superseded_by") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  questionnaire MedicalQuestionnaire @relation(fields: [questionnaireId], references: [id])
+
+  @@index([questionnaireId, createdAt(sort: Desc)])
+  @@map("triage_results")
+}
+
+model AiSummary {
+  id              String    @id @default(uuid()) @db.Uuid
+  questionnaireId String    @unique @map("questionnaire_id") @db.Uuid
+  clinicId        String    @map("clinic_id") @db.Uuid
+  sText           String    @map("s_text")
+  oText           String    @map("o_text")
+  aText           String    @map("a_text")
+  pText           String    @map("p_text")
+  sourceRefs      Json?     @map("source_refs")
+  status          String    @default("unconfirmed")
+  confirmedBy     String?   @map("confirmed_by") @db.Uuid
+  confirmedAt     DateTime? @map("confirmed_at")
+  aiLogId         String?   @map("ai_log_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  questionnaire MedicalQuestionnaire @relation(fields: [questionnaireId], references: [id])
+  revisions     AiSummaryRevision[]
+
+  @@map("ai_summaries")
+}
+
+model AiSummaryRevision {
+  id              String   @id @default(uuid()) @db.Uuid
+  summaryId       String   @map("summary_id") @db.Uuid
+  editorDoctorId  String   @map("editor_doctor_id") @db.Uuid
+  sText           String   @map("s_text")
+  oText           String   @map("o_text")
+  aText           String   @map("a_text")
+  pText           String   @map("p_text")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  summary AiSummary @relation(fields: [summaryId], references: [id])
+
+  @@map("ai_summary_revisions")
+}
+
+model DoctorNote {
+  id               String   @id @default(uuid()) @db.Uuid
+  questionnaireId  String   @map("questionnaire_id") @db.Uuid
+  clinicId         String   @map("clinic_id") @db.Uuid
+  doctorId         String   @map("doctor_id") @db.Uuid
+  noteType         NoteType @map("note_type")
+  body             String
+  visibleToPatient Boolean  @default(false) @map("visible_to_patient")
+  revisionOf       String?  @map("revision_of") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  questionnaire MedicalQuestionnaire @relation(fields: [questionnaireId], references: [id])
+
+  @@index([questionnaireId])
+  @@map("doctor_notes")
+}
+
+model UploadedImage {
+  id              String   @id @default(uuid()) @db.Uuid
+  questionnaireId String   @map("questionnaire_id") @db.Uuid
+  clinicId        String   @map("clinic_id") @db.Uuid
+  storagePath     String   @map("storage_path")
+  mimeType        String   @map("mime_type")
+  byteSize        Int      @map("byte_size")
+  exifStripped    Boolean  @default(false) @map("exif_stripped")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  questionnaire MedicalQuestionnaire @relation(fields: [questionnaireId], references: [id])
+
+  @@map("uploaded_images")
+}
+
+model AppointmentSlot {
+  id        String   @id @default(uuid()) @db.Uuid
+  clinicId  String   @map("clinic_id") @db.Uuid
+  doctorId  String   @map("doctor_id") @db.Uuid
+  startAt   DateTime @map("start_at")
+  endAt     DateTime @map("end_at")
+  status    String   @default("open")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  doctor       Doctor        @relation(fields: [doctorId], references: [id])
+  appointments Appointment[]
+
+  @@unique([doctorId, startAt])
+  @@index([clinicId, doctorId, startAt])
+  @@map("appointment_slots")
+}
+
+model Appointment {
+  id              String     @id @default(uuid()) @db.Uuid
+  clinicId        String     @map("clinic_id") @db.Uuid
+  patientId       String     @map("patient_id") @db.Uuid
+  doctorId        String     @map("doctor_id") @db.Uuid
+  slotId          String     @map("slot_id") @db.Uuid
+  questionnaireId String?    @map("questionnaire_id") @db.Uuid
+  status          ApptStatus @default(booked)
+  videoRoomUrl    String?    @map("video_room_url")
+  videoRoomName   String?    @map("video_room_name")
+  canceledAt      DateTime?  @map("canceled_at")
+  canceledBy      String?    @map("canceled_by") @db.Uuid
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  clinic        Clinic                @relation(fields: [clinicId], references: [id])
+  patient       Patient               @relation(fields: [patientId], references: [id])
+  doctor        Doctor                @relation(fields: [doctorId], references: [id])
+  slot          AppointmentSlot       @relation(fields: [slotId], references: [id])
+  questionnaire MedicalQuestionnaire? @relation(fields: [questionnaireId], references: [id])
+
+  // 部分UNIQUE（slot_id WHERE status <> 'canceled'）は手書きSQLで作成
+  @@index([clinicId, status])
+  @@map("appointments")
+}
+
+model AiLog {
+  id               String    @id @default(uuid()) @db.Uuid
+  clinicId         String    @map("clinic_id") @db.Uuid
+  questionnaireId  String?   @map("questionnaire_id") @db.Uuid
+  purpose          AiPurpose
+  provider         String
+  model            String
+  promptVersion    String    @map("prompt_version")
+  requestPayload   Json      @map("request_payload")
+  responsePayload  Json?     @map("response_payload")
+  outputValidation Json?     @map("output_validation")
+  status           String
+  latencyMs        Int?      @map("latency_ms")
+  tokensIn         Int?      @map("tokens_in")
+  tokensOut        Int?      @map("tokens_out")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  questionnaire MedicalQuestionnaire? @relation(fields: [questionnaireId], references: [id])
+
+  @@index([questionnaireId, createdAt])
+  @@map("ai_logs")
+}
+
+model AuditLog {
+  id           BigInt   @id @default(autoincrement())
+  actorUserId  String?  @map("actor_user_id") @db.Uuid
+  actorRole    String?  @map("actor_role")
+  clinicId     String?  @map("clinic_id") @db.Uuid
+  action       String
+  resourceType String?  @map("resource_type")
+  resourceId   String?  @map("resource_id") @db.Uuid
+  patientId    String?  @map("patient_id") @db.Uuid
+  ip           String?
+  userAgent    String?  @map("user_agent")
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([patientId, createdAt(sort: Desc)])
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  clinicId  String?   @map("clinic_id") @db.Uuid
+  type      String
+  channel   String
+  title     String
+  body      String
+  status    String    @default("queued")
+  sentAt    DateTime? @map("sent_at")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model Consent {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  consentType String   @map("consent_type")
+  version     String
+  granted     Boolean
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, consentType, createdAt(sort: Desc)])
+  @@map("consents")
+}
+
+model DeletionRequest {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  status      String    @default("requested")
+  reason      String?
+  requestedAt DateTime  @default(now()) @map("requested_at")
+  processedAt DateTime? @map("processed_at")
+  processedBy String?   @map("processed_by") @db.Uuid
+
+  @@map("deletion_requests")
+}
+
+model TriageRule {
+  id          String   @id @default(uuid()) @db.Uuid
+  ruleKey     String   @unique @map("rule_key")
+  description String
+  target      String
+  pattern     Json
+  level       TriageLevel
+  active      Boolean  @default(true)
+  version     String   @default("1")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("triage_rules")
+}
