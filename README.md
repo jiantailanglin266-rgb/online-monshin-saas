@@ -2,6 +2,11 @@
 
 患者がスマホから症状を入力すると、AIが追加質問で情報を補い、医師向けの問診レポート（SOAP形式）と受診の目安（緊急度4分類）を生成するマルチテナントSaaS。
 
+**🌐 公開デモ（GitHub Pages）**：https://jiantailanglin266-rgb.github.io/online-monshin-saas/
+（ブラウザ内デモエンジンで動作。データは端末のlocalStorageのみに保存され、外部送信されません）
+
+デモの更新：`bash scripts/build-static.sh` → `out/` を gh-pages ブランチへ force push。
+
 > **本システムは医師の診断を代替しません。**
 > AIは診断名を断定せず、問診整理・緊急度の目安・医師向け要約・受診科目の候補提示のみを行います。最終判断は常に医師が行います。
 
